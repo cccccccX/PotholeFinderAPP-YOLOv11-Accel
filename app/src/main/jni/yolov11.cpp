@@ -263,8 +263,8 @@ int Inference::loadNcnnNetwork(AAssetManager* mgr, const char* modeltype , const
 //    sprintf(modelpath, "yolov11%s_ncnn_model/yolov11n.ncnn.bin", modeltype);
 //    sprintf(parampath, "yolov11_ncnn_model/yolov11.param", modeltype);
 //    sprintf(modelpath, "yolov11_ncnn_model/yolov11.bin", modeltype);
-    sprintf(parampath, "yolov11_ncnn_model/ncnn_model_640/model.ncnn.param", modeltype);
-    sprintf(modelpath, "yolov11_ncnn_model/ncnn_model_640/model.ncnn.bin", modeltype);
+    sprintf(parampath, "yolov11_ncnn_model/ncnn_model_8000/model.ncnn.param", modeltype);
+    sprintf(modelpath, "yolov11_ncnn_model/ncnn_model_8000/model.ncnn.bin", modeltype);
 
     net.load_param(mgr, parampath);
     net.load_model(mgr, modelpath);
@@ -408,7 +408,7 @@ std::vector<Object> Inference::runInference(const cv::Mat &bgr)
 int Inference::draw(cv::Mat& bgr, const std::vector<Object>& objects) 
 {
     static const char* class_names[] = {
-		"pothole",
+            "Crack", "Manhole", "Net", "Pothole", "Patch-Crack", "Patch-Net", "Patch-Pothole", "other", "Other"
 	};
     cv::Mat res = bgr;
     for (size_t i = 0; i < objects.size(); i++)

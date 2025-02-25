@@ -197,8 +197,8 @@ JNIEXPORT jboolean JNICALL Java_com_hzcu_potholeDetection_Yolov11Ncnn_loadModel(
 
     const int target_sizes[] =
     {
-//        320,
-        640,
+        320,
+//        640,
     };
 
     const float mean_vals[][3] =

@@ -23,7 +23,8 @@ public class Yolov11Ncnn
     public native boolean openCamera(int facing);
     public native boolean closeCamera();
     public native boolean setOutputWindow(Surface surface);
-
+    // 新增采集状态控制接口
+    public native void setCollectionState(boolean state);
     static {
         System.loadLibrary("yolov11ncnn");
     }

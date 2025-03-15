@@ -14,12 +14,6 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        // 在这里设置全局的 C/C++ 编译选项
-//        externalNativeBuild {
-//            cmake {
-//                arguments "-DANDROID_STL=c++_shared", "-DCMAKE_CXX_FLAGS=-frtti -fexceptions"
-//            }
-//        }
     }
 
     buildTypes {
@@ -34,11 +28,7 @@ android {
     }
     externalNativeBuild {
         cmake {
-            version "3.31.1"
             path file('src/main/jni/CMakeLists.txt')
-//            cppFlags "-frtti -fexceptions"
-            // 使用 arguments 方法传递编译选项
-//            arguments "-DCMAKE_CXX_FLAGS=-frtti -fexceptions"
         }
     }
 }

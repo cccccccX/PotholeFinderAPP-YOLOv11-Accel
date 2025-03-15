@@ -18,16 +18,10 @@ import android.widget.Button;
 import android.widget.Spinner;
 import android.widget.TextView;
 import androidx.annotation.NonNull;
-import androidx.camera.core.Preview;
 import androidx.core.app.ActivityCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
-import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageCapture;
-import androidx.camera.core.ImageCaptureException;
-import androidx.camera.lifecycle.ProcessCameraProvider;
-import androidx.camera.view.PreviewView;
-import androidx.lifecycle.LifecycleOwner;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -37,30 +31,14 @@ import java.util.Date;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.ExecutionException;
 import android.location.LocationListener;
 import android.location.LocationManager;
 
-import android.Manifest;
-import android.app.Activity;
-import android.content.pm.PackageManager;
 import android.graphics.PixelFormat;
-import android.os.Bundle;
-import android.util.Log;
 import android.view.SurfaceHolder;
-import android.view.SurfaceView;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.AdapterView;
-import android.widget.Button;
-import android.widget.Spinner;
-
-//import android.support.v4.app.ActivityCompat;
-
-import androidx.core.app.ActivityCompat;
-//import android.support.v4.content.ContextCompat;
-import androidx.core.content.ContextCompat;
-
 public class MainActivity2 extends AppCompatActivity implements SensorEventListener{
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
@@ -318,9 +296,11 @@ public class MainActivity2 extends AppCompatActivity implements SensorEventListe
         if (isCollecting) {
             buttonToggleCollection.setText("Stop Collection");
             startCollection();
+            yolov11ncnn.setCollectionState(true);
         } else {
             buttonToggleCollection.setText("Start Collection");
             stopCollection();
+            yolov11ncnn.setCollectionState(false);
         }
     }
 
@@ -342,46 +322,6 @@ public class MainActivity2 extends AppCompatActivity implements SensorEventListe
         }
     }
 
-//    private void takePhoto(String timestamp) {
-//        imageCapture.takePicture(
-//                new ImageCapture.OutputFileOptions.Builder(
-//                        new File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "image_" + timestamp + ".jpg"))
-//                        .build(),
-//                ContextCompat.getMainExecutor(this),
-//                new ImageCapture.OnImageSavedCallback() {
-//                    @Override
-//                    public void onImageSaved(@NonNull ImageCapture.OutputFileResults outputFileResults) {
-//                        Log.d(TAG, "Image saved successfully.");
-//                    }
-//
-//                    @Override
-//                    public void onError(@NonNull ImageCaptureException exception) {
-//                        Log.e(TAG, "Error taking photo", exception);
-//                    }
-//                });
-//    }
-
-//    private void startCamera() {
-//        ProcessCameraProvider.getInstance(this).addListener(() -> {
-//            try {
-//                ProcessCameraProvider cameraProvider = ProcessCameraProvider.getInstance(this).get();
-//
-//                Preview preview = new Preview.Builder().build();
-//                preview.setSurfaceProvider(previewView.getSurfaceProvider());
-//
-//                imageCapture = new ImageCapture.Builder().build();
-//
-//                CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
-//
-//                cameraProvider.unbindAll();
-//                cameraProvider.bindToLifecycle(
-//                        ((LifecycleOwner) this), cameraSelector, preview, imageCapture);
-//
-//            } catch (ExecutionException | InterruptedException e) {
-//                Log.e(TAG, "Use case binding failed", e);
-//            }
-//        }, ContextCompat.getMainExecutor(this));
-//    }
 
     @Override
     public void onSensorChanged(SensorEvent event) {

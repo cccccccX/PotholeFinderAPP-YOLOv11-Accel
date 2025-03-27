@@ -59,34 +59,56 @@
         android:orientation="vertical"
         android:padding="8dp">
 
-        <TextView
-            android:id="@+id/textView_acceleration"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Acceleration Data will appear here"
-            android:textSize="18sp"
-            android:layout_marginTop="8dp" />
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:id="@+id/textView_acceleration"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="加速度数据："
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/textView_gyroscope"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="角速度数据："
+                android:textSize="18sp" />
+        </LinearLayout>
+
 
         <TextView
             android:id="@+id/textView_location"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Location Data will appear here"
+            android:text="正在获取地理位置..."
             android:textSize="18sp"
             android:layout_marginTop="8dp" />
         <TextView
             android:id="@+id/textView_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Time will appear here"
+            android:text="当前时间："
             android:textSize="18sp"
             android:layout_marginTop="8dp" />
-
+        <TextView
+            android:id="@+id/tvDetected"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="加速度检测：0"
+            android:textSize="18sp"
+            android:layout_marginTop="8dp" />
         <Button
             android:id="@+id/button_toggle_collection"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Start Collection"
+            android:text="开始采集"
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="16dp" />
     </LinearLayout>

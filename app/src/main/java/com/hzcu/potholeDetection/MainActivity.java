@@ -1,165 +1,237 @@
 package com.hzcu.potholeDetection;
 
-// MainActivity.java
-// Tencent is pleased to support the open source community by making ncnn available.
-//
-// Copyright (C) 2021 THL A29 Limited, a Tencent company. All rights reserved.
-//
-// Licensed under the BSD 3-Clause License (the "License"); you may not use this file except
-// in compliance with the License. You may obtain a copy of the License at
-//
-// https://opensource.org/licenses/BSD-3-Clause
-//
-// Unless required by applicable law or agreed to in writing, software distributed
-// under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-// CONDITIONS OF ANY KIND, either express or implied. See the License for the
-// specific language governing permissions and limitations under the License.
-
 import android.Manifest;
-import android.app.Activity;
 import android.content.pm.PackageManager;
-import android.graphics.PixelFormat;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
-import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.widget.Button;
+import android.widget.Spinner;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
+
+import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+import android.graphics.PixelFormat;
+import android.view.SurfaceHolder;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.AdapterView;
-import android.widget.Button;
-import android.widget.Spinner;
+public class MainActivity extends AppCompatActivity implements SensorEventListener{
 
-//import android.support.v4.app.ActivityCompat;
-
-import androidx.core.app.ActivityCompat;
-//import android.support.v4.content.ContextCompat;
-import androidx.core.content.ContextCompat;
-
-public class MainActivity extends Activity implements SurfaceHolder.Callback
-{
-    public static final int REQUEST_CAMERA = 100;
+    private static final int CAMERA_PERMISSION_REQUEST_CODE = 1;
+    private TextView textViewAcceleration, textViewTime;
+    private Button buttonToggleCollection;
+    private SensorManager sensorManager;
+    private float[] latestAcceleration = new float[3];
+    private boolean isCollecting = false;
+    private Handler handler = new Handler(Looper.getMainLooper());
+    private Runnable updateTimeRunnable = this::updateTimeUI;
 
     private Yolov11Ncnn yolov11ncnn = new Yolov11Ncnn();
-    private int facing = 1;
+    private int cameraFacing = 1;
 
     private Spinner spinnerModel;
     private Spinner spinnerCPUGPU;
-    private int current_model = 0;
-    private int current_cpugpu = 0;
+    private int currentModel = 0;
+    private int currentCpugpu = 0;
 
     private SurfaceView cameraView;
 
-    /** Called when the activity is first created. */
-    @Override
-    public void onCreate(Bundle savedInstanceState)
-    {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main2);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        cameraView = (SurfaceView) findViewById(R.id.cameraview);
-
-        cameraView.getHolder().setFormat(PixelFormat.RGBA_8888);
-        cameraView.getHolder().addCallback(this);
-
-        Button buttonSwitchCamera = (Button) findViewById(R.id.buttonSwitchCamera);
-        buttonSwitchCamera.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View arg0) {
-
-                int new_facing = 1 - facing;
-
-                yolov11ncnn.closeCamera();
-
-                yolov11ncnn.openCamera(new_facing);
-
-                facing = new_facing;
+        // 先设置路径，再打开相机和加载模型
+        // 获取应用专用目录
+        File rootDir = getExternalFilesDir(null);
+        if (rootDir != null) {
+            String rootPath = rootDir.getAbsolutePath();
+            if (!rootPath.endsWith("/")) {
+                rootPath += "/";
             }
+            Log.d("MainActivity", "Setting root path: " + rootPath);
+            yolov11ncnn.setRootPath(rootPath);
+        } else {
+            Log.e("MainActivity", "getExternalFilesDir(null) returned null");
+        }
+        // 抽取控件初始化
+        initView();
+
+        // 检查并请求相机权限（封装权限请求逻辑）
+        checkAndRequestCameraPermission();
+
+        startUpdateTimeThread();
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+
+        buttonToggleCollection.setOnClickListener(v -> toggleCollection());
+    }
+    /**
+     * 封装控件的查找和初始化
+     */
+    private void initView() {
+        cameraView = findViewById(R.id.cameraview);
+        cameraView.getHolder().setFormat(PixelFormat.RGBA_8888);
+        cameraView.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override
+            public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+                yolov11ncnn.setOutputWindow(holder.getSurface());
+            }
+            @Override
+            public void surfaceCreated(SurfaceHolder holder) { }
+            @Override
+            public void surfaceDestroyed(SurfaceHolder holder) { }
         });
 
-        spinnerModel = (Spinner) findViewById(R.id.spinnerModel);
+        Button buttonSwitchCamera = findViewById(R.id.buttonSwitchCamera);
+        buttonSwitchCamera.setOnClickListener(v -> {
+            int newFacing = 1 - cameraFacing;
+            yolov11ncnn.closeCamera();
+            yolov11ncnn.openCamera(newFacing);
+            cameraFacing = newFacing;
+        });
+
+        spinnerModel = findViewById(R.id.spinnerModel);
         spinnerModel.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
-            public void onItemSelected(AdapterView<?> arg0, View arg1, int position, long id)
-            {
-                if (position != current_model)
-                {
-                    current_model = position;
-                    reload();
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (position != currentModel) {
+                    currentModel = position;
+                    loadModel();
                 }
             }
-
             @Override
-            public void onNothingSelected(AdapterView<?> arg0)
-            {
-            }
+            public void onNothingSelected(AdapterView<?> parent) { }
         });
 
-        spinnerCPUGPU = (Spinner) findViewById(R.id.spinnerCPUGPU);
+        spinnerCPUGPU = findViewById(R.id.spinnerCPUGPU);
         spinnerCPUGPU.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
-            public void onItemSelected(AdapterView<?> arg0, View arg1, int position, long id)
-            {
-                if (position != current_cpugpu)
-                {
-                    current_cpugpu = position;
-                    reload();
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (position != currentCpugpu) {
+                    currentCpugpu = position;
+                    loadModel();
                 }
             }
-
             @Override
-            public void onNothingSelected(AdapterView<?> arg0)
-            {
-            }
+            public void onNothingSelected(AdapterView<?> parent) { }
         });
 
-        reload();
+        textViewAcceleration = findViewById(R.id.textView_acceleration);
+        textViewTime = findViewById(R.id.textView_time);
+        buttonToggleCollection = findViewById(R.id.button_toggle_collection);
+    }
+    /**
+     * 封装相机权限的检查和请求逻辑，确保仅在获得权限后才调用 openCamera() 和 loadModel()。
+     */
+    private void checkAndRequestCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA},
+                    CAMERA_PERMISSION_REQUEST_CODE);
+        } else {
+            // 如果已经授权，直接打开摄像头并加载模型
+            yolov11ncnn.openCamera(cameraFacing);
+            loadModel();
+        }
+    }
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == CAMERA_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // 用户授予权限后，打开相机
+                yolov11ncnn.openCamera(cameraFacing);
+                loadModel();
+            } else {
+                // 用户拒绝权限，提示或处理相应逻辑
+            }
+        }
     }
 
-    private void reload()
-    {
-        boolean ret_init = yolov11ncnn.loadModel(getAssets(), current_model, current_cpugpu);
+    /**
+     * 加载目标检测模型
+     */
+    private void loadModel() {
+        boolean ret_init = yolov11ncnn.loadModel(getAssets(), currentModel, currentCpugpu);
         if (!ret_init)
         {
             Log.e("MainActivity", "yolov11ncnn loadModel failed");
         }
     }
 
-    @Override
-    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height)
-    {
-        yolov11ncnn.setOutputWindow(holder.getSurface());
+    /**
+     * 屏幕时间显示线程
+     */
+    private void startUpdateTimeThread() {
+        handler.post(updateTimeRunnable);
     }
 
-    @Override
-    public void surfaceCreated(SurfaceHolder holder)
-    {
+    private void updateTimeUI() {
+        textViewTime.setText(new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date()));
+        handler.postDelayed(updateTimeRunnable, 1000); // 每隔一秒更新一次时间
     }
 
-    @Override
-    public void surfaceDestroyed(SurfaceHolder holder)
-    {
-    }
-
-    @Override
-    public void onResume()
-    {
-        super.onResume();
-
-        if (ContextCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_DENIED)
-        {
-            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.CAMERA}, REQUEST_CAMERA);
+    /**
+     * 数据采集开关（通过JNI在C++中实现图像存储）
+     */
+    private void toggleCollection() {
+        isCollecting = !isCollecting;
+        if (isCollecting) {
+            buttonToggleCollection.setText("Stop Collection");
+            yolov11ncnn.setCollectionState(true);
+        } else {
+            buttonToggleCollection.setText("Start Collection");
+            yolov11ncnn.setCollectionState(false);
         }
-
-        yolov11ncnn.openCamera(facing);
     }
 
     @Override
-    public void onPause()
-    {
-        super.onPause();
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+            System.arraycopy(event.values, 0, latestAcceleration, 0, Math.min(event.values.length, latestAcceleration.length));
+            runOnUiThread(() -> {
+                textViewAcceleration.setText(String.format("X: %.2f\nY: %.2f\nZ: %.2f",
+                        latestAcceleration[0], latestAcceleration[1], latestAcceleration[2]));
+            });
+        }
+    }
 
-        yolov11ncnn.closeCamera();
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // 在这里处理传感器精度变化（可选）
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+        if (isCollecting) {
+            yolov11ncnn.setCollectionState(true);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        sensorManager.unregisterListener(this);
+        yolov11ncnn.setCollectionState(false);
     }
 }

@@ -44,9 +44,9 @@
 #include <string>
 
 // 定义三个文件夹路径（建议使用实际可写路径，下面仅为示例）
-static std::string g_rawFolder         = "/storage/emulated/0/Android/data/com.hzcu.potholeDetection/files/RawImages/";
-static std::string g_annotatedFolder   = "/storage/emulated/0/Android/data/com.hzcu.potholeDetection/files/AnnotatedImages/";
-static std::string g_annotationFolder  = "/storage/emulated/0/Android/data/com.hzcu.potholeDetection/files/Annotations/";
+static std::string g_rawFolder;
+static std::string g_annotatedFolder;
+static std::string g_annotationFolder;
 
 // 控制采集图像的开关（由 Java 调用 setCollectionState 设置）
 volatile bool g_isCollectingImages = false;
@@ -573,5 +573,20 @@ JNIEXPORT jboolean JNICALL Java_com_hzcu_potholeDetection_Yolov11Ncnn_setOutputW
 
     return JNI_TRUE;
 }
+JNIEXPORT void JNICALL Java_com_hzcu_potholeDetection_Yolov11Ncnn_setRootPath(JNIEnv* env, jobject thiz, jstring path)
+{
+    const char *nativePath = env->GetStringUTFChars(path, 0);
+    std::string root(nativePath);
+    env->ReleaseStringUTFChars(path, nativePath);
 
+    // 根据传入的根目录构造子目录路径
+    g_rawFolder = root + "RawImages/";
+    g_annotatedFolder = root + "AnnotatedImages/";
+    g_annotationFolder = root + "Annotations/";
+
+    __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Set root path: %s", root.c_str());
+    __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "g_rawFolder: %s", g_rawFolder.c_str());
+    __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "g_annotatedFolder: %s", g_annotatedFolder.c_str());
+    __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "g_annotationFolder: %s", g_annotationFolder.c_str());
+}
 }

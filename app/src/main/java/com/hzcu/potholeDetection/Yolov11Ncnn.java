@@ -25,6 +25,8 @@ public class Yolov11Ncnn
     public native boolean setOutputWindow(Surface surface);
     // 新增采集状态控制接口
     public native void setCollectionState(boolean state);
+    // 新增数据存储路径接口
+    public native void setRootPath(String path);
     static {
         System.loadLibrary("yolov11ncnn");
     }

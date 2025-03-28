@@ -244,34 +244,6 @@ void MyNdkCamera::on_image_render(cv::Mat& rgb) const
 {
     // 先保存原始图像（检测前）
     cv::Mat rawCopy = rgb.clone();
-    if (g_isCollectingImages)
-    {
-        if (!ensureDirExists(g_rawFolder)) {
-            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Raw folder check failed: %s", g_rawFolder.c_str());
-        }
-
-        using namespace std::chrono;
-        auto now = system_clock::now();
-        std::time_t now_time = system_clock::to_time_t(now);
-        std::tm* tm_info = std::localtime(&now_time);
-        char timestamp[80];
-        std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_info);
-        auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
-        sprintf(timestamp + std::strlen(timestamp), "_%03d", (int)ms.count());
-        std::string rawFilename = g_rawFolder + timestamp + ".bmp";
-//        char timestamp[64];
-//        std::time_t now = std::time(nullptr);
-//        std::tm* tm_info = std::localtime(&now);
-//        std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_info);
-//        std::string rawFilename = g_rawFolder + timestamp + ".bmp";
-        if (!saveMatAsBMP(rawFilename, rawCopy))
-        {
-            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to save raw image: %s", rawFilename.c_str());
-        }
-        else {
-            __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved raw image: %s", rawFilename.c_str());
-        }
-    }
 
     // 运行目标检测并绘制检测框
     std::vector<Object> objects;
@@ -289,57 +261,78 @@ void MyNdkCamera::on_image_render(cv::Mat& rgb) const
     }
     draw_fps(rgb);
 
-    // 如果检测到目标，则保存带检测框的图像和生成标注文件
-    if (g_isCollectingImages && !objects.empty())
-    {
-        if (!ensureDirExists(g_annotatedFolder)) {
-            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Annotated folder check failed: %s", g_annotatedFolder.c_str());
-        }
-        if (!ensureDirExists(g_annotationFolder)) {
-            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Annotation folder check failed: %s", g_annotationFolder.c_str());
-        }
-//        char timestamp[64];
-//        std::time_t now = std::time(nullptr);
-//        std::tm* tm_info = std::localtime(&now);
-//        std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_info);
-        using namespace std::chrono;
-        auto now = system_clock::now();
-        std::time_t now_time = system_clock::to_time_t(now);
-        std::tm* tm_info = std::localtime(&now_time);
-        char timestamp[80];
-        std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", tm_info);
-        auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
-        sprintf(timestamp + std::strlen(timestamp), "_%03d", (int)ms.count());
-        std::string annotatedFilename = g_annotatedFolder + timestamp + ".bmp";
-        if (!saveMatAsBMP(annotatedFilename, rgb))
-        {
-            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to save annotated image: %s", annotatedFilename.c_str());
-        }
-        else {
-            __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved annotated image: %s", annotatedFilename.c_str());
-        }
-
-        // 生成标注文件（格式：类别编号 center_x center_y norm_width norm_height）
-        int imgWidth = rawCopy.cols;
-        int imgHeight = rawCopy.rows;
-        std::string annotationFilename = g_annotationFolder + timestamp + ".txt";
-        FILE* f = fopen(annotationFilename.c_str(), "w");
-        if (!f) {
-            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to open annotation file for writing: %s", annotationFilename.c_str());
-        } else {
-            for (size_t i = 0; i < objects.size(); i++)
-            {
-                const Object& obj = objects[i];
-                float centerX = (obj.rect.x + obj.rect.width / 2.0f) / imgWidth;
-                float centerY = (obj.rect.y + obj.rect.height / 2.0f) / imgHeight;
-                float normWidth = obj.rect.width / imgWidth;
-                float normHeight = obj.rect.height / imgHeight;
-                fprintf(f, "%d %.8f %.8f %.8f %.8f\n", obj.label, centerX, centerY, normWidth, normHeight);
-            }
-            fclose(f);
-            __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved annotation file: %s", annotationFilename.c_str());
+    // 过滤只保留类别 0 (Crack)、2 (Net) 和 3 (Pothole)
+    std::vector<Object> filteredObjects;
+    for (auto& obj : objects) {
+        if (obj.label == 0 || obj.label == 2 || obj.label == 3) {
+            filteredObjects.push_back(obj);
         }
     }
+
+    if (g_isCollectingImages)
+    {
+        if (!ensureDirExists(g_rawFolder)) {
+            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Raw folder check failed: %s", g_rawFolder.c_str());
+        }
+        //直接采用 epoch 毫秒数
+        using namespace std::chrono;
+        auto now = system_clock::now();
+        long long epochMillis = duration_cast<milliseconds>(now.time_since_epoch()).count();
+        char timestamp[32];
+        sprintf(timestamp, "%lld", epochMillis);
+
+        std::string rawFilename = g_rawFolder + timestamp + ".bmp";
+        if (!saveMatAsBMP(rawFilename, rawCopy))
+        {
+            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to save raw image: %s", rawFilename.c_str());
+        }
+        else {
+            __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved raw image: %s", rawFilename.c_str());
+        }
+
+        // 如果检测到目标，则保存带检测框的图像和生成标注文件
+        if (!filteredObjects.empty())
+        {
+            if (!ensureDirExists(g_annotatedFolder)) {
+                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Annotated folder check failed: %s", g_annotatedFolder.c_str());
+            }
+            if (!ensureDirExists(g_annotationFolder)) {
+                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Annotation folder check failed: %s", g_annotationFolder.c_str());
+            }
+
+            std::string annotatedFilename = g_annotatedFolder + timestamp + ".bmp";
+            if (!saveMatAsBMP(annotatedFilename, rgb))
+            {
+                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to save annotated image: %s", annotatedFilename.c_str());
+            }
+            else {
+                __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved annotated image: %s", annotatedFilename.c_str());
+            }
+
+            // 生成标注文件（格式：类别编号 center_x center_y norm_width norm_height）
+            int imgWidth = rawCopy.cols;
+            int imgHeight = rawCopy.rows;
+            std::string annotationFilename = g_annotationFolder + timestamp + ".txt";
+            FILE* f = fopen(annotationFilename.c_str(), "w");
+            if (!f) {
+                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to open annotation file for writing: %s", annotationFilename.c_str());
+            } else {
+                for (size_t i = 0; i < filteredObjects.size(); i++)
+                {
+                    const Object& obj = filteredObjects[i];
+                    float centerX = (obj.rect.x + obj.rect.width / 2.0f) / imgWidth;
+                    float centerY = (obj.rect.y + obj.rect.height / 2.0f) / imgHeight;
+                    float normWidth = obj.rect.width / imgWidth;
+                    float normHeight = obj.rect.height / imgHeight;
+                    fprintf(f, "%d %.8f %.8f %.8f %.8f\n", obj.label, centerX, centerY, normWidth, normHeight);
+                }
+                fclose(f);
+                __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved annotation file: %s", annotationFilename.c_str());
+            }
+        }
+    }
+
+
 }
 
 

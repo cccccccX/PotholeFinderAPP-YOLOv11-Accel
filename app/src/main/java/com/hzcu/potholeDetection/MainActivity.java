@@ -59,9 +59,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     // 传感器管理
     private SensorManager sensorManager;
     private Sensor mAccelsensor, mGyrosensor;
-    private float[] latestAcceleration = new float[3];
     // 窗口采样数据
-    private int dataPoint = 0, calibCount = 0, WINDOW_SIZE = 50;
+    private int dataPoint = 0, WINDOW_SIZE = 50;
     private float[] x = new float[WINDOW_SIZE], y = new float[WINDOW_SIZE], z = new float[WINDOW_SIZE];
     private float[] xg = new float[WINDOW_SIZE], yg = new float[WINDOW_SIZE], zg = new float[WINDOW_SIZE];
     private float sumx, sumy, sumz, soqx, soqy, soqz;
@@ -72,11 +71,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private float meanxg, meanyg, meanzg;
     private float sdxg, sdyg, sdzg;
 
-    // 校准相关
-    private float offsetx = 0, offsety = 0, offsetz = 0, magoffset = 0;
-    private float unitoffsetx = 0, unitoffsety = 0, unitoffsetz = 0;
-    private float[][] Rotation;
-    private boolean calibrated = false;
 
     // SVM 预测及检测状态
     private double prediction = 0;
@@ -108,7 +102,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         setContentView(R.layout.activity_main2);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        //TODO:抽取成函数
         // 先设置路径，再打开相机和加载模型
         // 获取应用专用目录
         File rootDir = getExternalFilesDir(null);
@@ -299,9 +292,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // -----【显示传感器数据部分】-----
         if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
-            System.arraycopy(event.values, 0, latestAcceleration, 0, Math.min(event.values.length, latestAcceleration.length));
             runOnUiThread(() -> textViewAcceleration.setText(
-                    String.format("加速度数据：\nX: %.2f\nY: %.2f\nZ: %.2f", latestAcceleration[0], latestAcceleration[1], latestAcceleration[2])
+                    String.format("加速度数据：\nX: %.2f\nY: %.2f\nZ: %.2f", event.values[0], event.values[1], event.values[2])
             ));
         }
         if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
@@ -323,6 +315,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Log.d("FileWrite", "Raw data written: " + rawLine);
         }
 
+        // -----【简单节流】-----
+        if (System.currentTimeMillis() - time < 15) {
+            return;
+        }
+        time = System.currentTimeMillis();
+
+        if (!enable_detection) {
+            return;
+        }
 
         // -----【更新循环缓冲区】-----
         dataPoint = (dataPoint + 1) % WINDOW_SIZE;
@@ -336,136 +337,100 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             z[dataPoint] = event.values[2];
         }
 
-
-        // -----【简单节流】-----
-        if (System.currentTimeMillis() - time < 15) {
-            return;
+        // -----【计算加速度窗口内各轴均值、方差及标准差（加速度）】-----
+        sumx = sumy = sumz = soqx = soqy = soqz = 0;
+        for (int j = 0; j < WINDOW_SIZE; j++) {
+            sumx += x[j];
+            sumy += y[j];
+            sumz += z[j];
+            soqx += x[j] * x[j];
+            soqy += y[j] * y[j];
+            soqz += z[j] * z[j];
         }
-        time = System.currentTimeMillis();
+        meanx = sumx / WINDOW_SIZE;
+        meany = sumy / WINDOW_SIZE;
+        meanz = sumz / WINDOW_SIZE;
+        float varx = Math.abs((soqx / WINDOW_SIZE) - (meanx * meanx));
+        float vary = Math.abs((soqy / WINDOW_SIZE) - (meany * meany));
+        float varz = Math.abs((soqz / WINDOW_SIZE) - (meanz * meanz));
+        sdx = (float) Math.sqrt(varx);
+        sdy = (float) Math.sqrt(vary);
+        sdz = (float) Math.sqrt(varz);
 
-        if (!enable_detection) {
-            return;
+
+        // -----【计算窗口内各轴均值、方差及标准差（陀螺仪）】-----
+        sumxg = sumyg = sumzg = soqxg = soqyg = soqzg = 0;
+        for (int j = 0; j < WINDOW_SIZE; j++) {
+            sumxg += xg[j];
+            sumyg += yg[j];
+            sumzg += zg[j];
+            soqxg += xg[j] * xg[j];
+            soqyg += yg[j] * yg[j];
+            soqzg += zg[j] * zg[j];
+        }
+        meanxg = sumxg / WINDOW_SIZE;
+        meanyg = sumyg / WINDOW_SIZE;
+        meanzg = sumzg / WINDOW_SIZE;
+        float varxg = Math.abs((soqxg / WINDOW_SIZE) - (meanxg * meanxg));
+        float varyg = Math.abs((soqyg / WINDOW_SIZE) - (meanyg * meanyg));
+        float varzg = Math.abs((soqzg / WINDOW_SIZE) - (meanzg * meanzg));
+        sdxg = (float) Math.sqrt(varxg);
+        sdyg = (float) Math.sqrt(varyg);
+        sdzg = (float) Math.sqrt(varzg);
+
+
+        // -----【构造特征向量并调用 SVM 预测】-----
+        double[] arr = {meanx, meany, meanz, sdx, sdy, sdz, meanxg, meanyg, meanzg, sdxg, sdyg, sdzg};
+        prediction = svmPredictor.doubleFromJNI(arr);
+
+
+        // -----【将特征数据写入文件（记录窗口起始与结束时间及特征值和预测结果）】-----
+        if (isCollecting && featureDataWriter != null) {
+            long currentTimeWindow = System.currentTimeMillis();
+            String featureLine = windowStartTime + "," + currentTimeWindow + ","
+                    + meanx + "," + meany + "," + meanz + ","
+                    + sdx + "," + sdy + "," + sdz + ","
+                    + meanxg + "," + meanyg + "," + meanzg + ","
+                    + sdxg + "," + sdyg + "," + sdzg + ","
+                    + prediction;
+            featureDataWriter.println(featureLine);
+            featureDataWriter.flush();
+            Log.d("FileWrite", "Feature data written: " + featureLine);
+            windowStartTime = currentTimeWindow;
         }
 
 
-        if (calibrated) {
-            // -----【计算加速度窗口内各轴均值、方差及标准差（加速度）】-----
-            sumx = sumy = sumz = soqx = soqy = soqz = 0;
-            for (int j = 0; j < WINDOW_SIZE; j++) {
-                sumx += x[j];
-                sumy += y[j];
-                sumz += z[j];
-                soqx += x[j] * x[j];
-                soqy += y[j] * y[j];
-                soqz += z[j] * z[j];
-            }
-            meanx = sumx / WINDOW_SIZE;
-            meany = sumy / WINDOW_SIZE;
-            meanz = sumz / WINDOW_SIZE;
-            float varx = Math.abs((soqx / WINDOW_SIZE) - (meanx * meanx));
-            float vary = Math.abs((soqy / WINDOW_SIZE) - (meany * meany));
-            float varz = Math.abs((soqz / WINDOW_SIZE) - (meanz * meanz));
-            sdx = (float) Math.sqrt(varx);
-            sdy = (float) Math.sqrt(vary);
-            sdz = (float) Math.sqrt(varz);
-
-
-            // -----【计算窗口内各轴均值、方差及标准差（陀螺仪）】-----
-            sumxg = sumyg = sumzg = soqxg = soqyg = soqzg = 0;
-            for (int j = 0; j < WINDOW_SIZE; j++) {
-                sumxg += xg[j];
-                sumyg += yg[j];
-                sumzg += zg[j];
-                soqxg += xg[j] * xg[j];
-                soqyg += yg[j] * yg[j];
-                soqzg += zg[j] * zg[j];
-            }
-            meanxg = sumxg / WINDOW_SIZE;
-            meanyg = sumyg / WINDOW_SIZE;
-            meanzg = sumzg / WINDOW_SIZE;
-            float varxg = Math.abs((soqxg / WINDOW_SIZE) - (meanxg * meanxg));
-            float varyg = Math.abs((soqyg / WINDOW_SIZE) - (meanyg * meanyg));
-            float varzg = Math.abs((soqzg / WINDOW_SIZE) - (meanzg * meanzg));
-            sdxg = (float) Math.sqrt(varxg);
-            sdyg = (float) Math.sqrt(varyg);
-            sdzg = (float) Math.sqrt(varzg);
-
-
-            // -----【构造特征向量并调用 SVM 预测】-----
-            double[] arr = {meanx, meany, meanz, sdx, sdy, sdz, meanxg, meanyg, meanzg, sdxg, sdyg, sdzg};
-            prediction = svmPredictor.doubleFromJNI(arr);
-
-
-            // -----【将特征数据写入文件（记录窗口起始与结束时间及特征值和预测结果）】-----
-            if (isCollecting && featureDataWriter != null) {
-                long currentTimeWindow = System.currentTimeMillis();
-                String featureLine = windowStartTime + "," + currentTimeWindow + ","
-                        + meanx + "," + meany + "," + meanz + ","
-                        + sdx + "," + sdy + "," + sdz + ","
-                        + meanxg + "," + meanyg + "," + meanzg + ","
-                        + sdxg + "," + sdyg + "," + sdzg + ","
-                        + prediction;
-                featureDataWriter.println(featureLine);
-                featureDataWriter.flush();
-                Log.d("FileWrite", "Feature data written: " + featureLine);
-                windowStartTime = currentTimeWindow;
-            }
-
-
-            // -----【根据预测结果进行显示与声音提示（此处设定 prediction==-1 表示检测到坑洞）】-----
-            if (potholeDetected && prediction == 1) {
-                potholeDetected = false;
-                if (tvCount != null) {
-                    tvCount.setTextColor(Color.GRAY);
-                }
-            }
-            if (prediction == -1 && !potholeDetected) {
-                if (tvCount != null) {
-                    tvCount.setTextColor(Color.RED);
-                }
-                mp.start();
-                potholeDetected = true;
-                time = System.currentTimeMillis() + 2000; // 超时2秒
-                count++;
-                if (sdz > 4.8) {
-                    effectOfRiding = "High";
-                } else if (sdz > 2.8) {
-                    effectOfRiding = "Moderate";
-                } else if (sdz > 1.8) {
-                    effectOfRiding = "Low";
-                } else {
-                    effectOfRiding = "Very Low";
-                }
-                effectOfRiding = "\"" + effectOfRiding + "\"";
-                accelTriggered = true;
-                if (tvCount != null) {
-                    tvCount.setText("加速度检测：" + count);
-                }
-            }
-            Log.d("MainActivity", "Pred: " + prediction);
-        } else {
-            // 未校准时对传感器数据进行简单累加（注意这里修正了原代码中累加同一轴的问题）
-            sumx += event.values[0];
-            sumy += event.values[1];
-            sumz += event.values[2];
-            calibCount++;
-            if (calibCount >= 10) {
-                offsetx = sumx / 10;
-                offsety = sumy / 10;
-                offsetz = sumz / 10;
-                magoffset = (float) Math.sqrt(offsetx * offsetx + offsety * offsety + offsetz * offsetz);
-                unitoffsetx = offsetx / magoffset;
-                unitoffsety = offsety / magoffset;
-                unitoffsetz = offsetz / magoffset;
-                float ax = (float) (3.26 / 9.8), ay = (float) (0.06 / 9.8), az = (float) (9.15 / 9.8);
-                Rotation = new float[][]{
-                        {unitoffsetx * ax, unitoffsetx * ay, unitoffsetx * az},
-                        {unitoffsety * ax, unitoffsety * ay, unitoffsety * az},
-                        {unitoffsetz * ax, unitoffsetz * ay, unitoffsetz * az}
-                };
-                calibrated = true;
+        // -----【根据预测结果进行显示与声音提示（此处设定 prediction==-1 表示检测到坑洞）】-----
+        if (potholeDetected && prediction == 1) {
+            potholeDetected = false;
+            if (tvCount != null) {
+                tvCount.setTextColor(Color.GRAY);
             }
         }
+        if (prediction == -1 && !potholeDetected) {
+            if (tvCount != null) {
+                tvCount.setTextColor(Color.RED);
+            }
+            mp.start();
+            potholeDetected = true;
+            time = System.currentTimeMillis() + 2000; // 超时2秒
+            count++;
+            if (sdz > 4.8) {
+                effectOfRiding = "High";
+            } else if (sdz > 2.8) {
+                effectOfRiding = "Moderate";
+            } else if (sdz > 1.8) {
+                effectOfRiding = "Low";
+            } else {
+                effectOfRiding = "Very Low";
+            }
+            effectOfRiding = "\"" + effectOfRiding + "\"";
+            accelTriggered = true;
+            if (tvCount != null) {
+                tvCount.setText("加速度检测：" + count);
+            }
+        }
+        Log.d("MainActivity", "Pred: " + prediction);
     }
 
     @Override
@@ -479,9 +444,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         lat = location.getLatitude();
         lon = location.getLongitude();
         speed = location.getSpeed();
-        textViewLocation.setText("纬度：" + lat + "经度：" + lon);
+        textViewLocation.setText("纬度：" + lat + " 经度：" + lon + " 速度：" + speed);
 //        Toast.makeText(getApplicationContext(), "Location Updated", Toast.LENGTH_LONG).show();
         Log.d("MainActivity", "Latitude:" + lat + ", Longitude:" + lon);
+        // 更新 native 层的车辆速度
+        yolov11ncnn.setVehicleSpeed(speed);
     }
     @Override
     public void onStatusChanged(String provider, int status, Bundle extras) { }

@@ -30,4 +30,6 @@ public class Yolov11Ncnn
     static {
         System.loadLibrary("yolov11ncnn");
     }
+    // 传递车辆速度接口
+    public native void setVehicleSpeed(double speed);
 }

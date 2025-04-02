@@ -50,6 +50,17 @@ static std::string g_annotationFolder;
 
 // 控制采集图像的开关（由 Java 调用 setCollectionState 设置）
 volatile bool g_isCollectingImages = false;
+// 当前车辆速度（单位：m/s），由 Java 层通过 JNI 定期更新
+volatile double g_currentSpeed = 0.0f;
+// 记录上一次保存图片的时间（单位：毫秒）
+static long long g_lastSavedTime = 0;
+
+// 定义存储间隔参数（可根据实际情况调整）
+const double T_MIN = 60.0f;    // 高速时最小存储间隔（50毫秒）
+const double T_MAX = 2000.0f;  // 低速（或静止）时的最大存储间隔（2000毫秒）
+const double V_MIN = 0.5f;     // 低速阈值（低于此值认为车辆处于停滞状态）
+const double V_MAX = 8.0f;    // 高速阈值（高于此值认为车辆行驶速度足够快）
+
 bool ensureDirExists(const std::string& path)
 {
     struct stat st;
@@ -281,55 +292,76 @@ void MyNdkCamera::on_image_render(cv::Mat& rgb) const
         char timestamp[32];
         sprintf(timestamp, "%lld", epochMillis);
 
-        std::string rawFilename = g_rawFolder + timestamp + ".bmp";
-        if (!saveMatAsBMP(rawFilename, rawCopy))
+        // 根据当前车辆速度计算存储间隔 T（毫秒），采用线性插值
+        double T;
+        if (g_currentSpeed <= V_MIN)
+            T = T_MAX;
+        else if (g_currentSpeed >= V_MAX)
+            T = T_MIN;
+        else
+            T = T_MAX - ((g_currentSpeed - V_MIN) / (V_MAX - V_MIN)) * (T_MAX - T_MIN);
+        // 判断是否达到存储时间间隔
+        if (epochMillis - g_lastSavedTime < static_cast<long long>(T))
         {
-            __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to save raw image: %s", rawFilename.c_str());
+            // 时间间隔不足，跳过本次保存
+            return;
         }
-        else {
-            __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved raw image: %s", rawFilename.c_str());
-        }
-
-        // 如果检测到目标，则保存带检测框的图像和生成标注文件
-        if (!filteredObjects.empty())
+        else
         {
-            if (!ensureDirExists(g_annotatedFolder)) {
-                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Annotated folder check failed: %s", g_annotatedFolder.c_str());
-            }
-            if (!ensureDirExists(g_annotationFolder)) {
-                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Annotation folder check failed: %s", g_annotationFolder.c_str());
-            }
+            // 更新时间戳
+            g_lastSavedTime = epochMillis;
 
-            std::string annotatedFilename = g_annotatedFolder + timestamp + ".bmp";
-            if (!saveMatAsBMP(annotatedFilename, rgb))
+            std::string rawFilename = g_rawFolder + timestamp + ".bmp";
+            if (!saveMatAsBMP(rawFilename, rawCopy))
             {
-                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to save annotated image: %s", annotatedFilename.c_str());
+                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to save raw image: %s", rawFilename.c_str());
             }
             else {
-                __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved annotated image: %s", annotatedFilename.c_str());
+                __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved raw image: %s", rawFilename.c_str());
             }
 
-            // 生成标注文件（格式：类别编号 center_x center_y norm_width norm_height）
-            int imgWidth = rawCopy.cols;
-            int imgHeight = rawCopy.rows;
-            std::string annotationFilename = g_annotationFolder + timestamp + ".txt";
-            FILE* f = fopen(annotationFilename.c_str(), "w");
-            if (!f) {
-                __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to open annotation file for writing: %s", annotationFilename.c_str());
-            } else {
-                for (size_t i = 0; i < filteredObjects.size(); i++)
-                {
-                    const Object& obj = filteredObjects[i];
-                    float centerX = (obj.rect.x + obj.rect.width / 2.0f) / imgWidth;
-                    float centerY = (obj.rect.y + obj.rect.height / 2.0f) / imgHeight;
-                    float normWidth = obj.rect.width / imgWidth;
-                    float normHeight = obj.rect.height / imgHeight;
-                    fprintf(f, "%d %.8f %.8f %.8f %.8f\n", obj.label, centerX, centerY, normWidth, normHeight);
+            // 如果检测到目标，则保存带检测框的图像和生成标注文件
+            if (!filteredObjects.empty())
+            {
+                if (!ensureDirExists(g_annotatedFolder)) {
+                    __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Annotated folder check failed: %s", g_annotatedFolder.c_str());
                 }
-                fclose(f);
-                __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved annotation file: %s", annotationFilename.c_str());
+                if (!ensureDirExists(g_annotationFolder)) {
+                    __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Annotation folder check failed: %s", g_annotationFolder.c_str());
+                }
+
+                std::string annotatedFilename = g_annotatedFolder + timestamp + ".bmp";
+                if (!saveMatAsBMP(annotatedFilename, rgb))
+                {
+                    __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to save annotated image: %s", annotatedFilename.c_str());
+                }
+                else {
+                    __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved annotated image: %s", annotatedFilename.c_str());
+                }
+
+                // 生成标注文件（格式：类别编号 center_x center_y norm_width norm_height）
+                int imgWidth = rawCopy.cols;
+                int imgHeight = rawCopy.rows;
+                std::string annotationFilename = g_annotationFolder + timestamp + ".txt";
+                FILE* f = fopen(annotationFilename.c_str(), "w");
+                if (!f) {
+                    __android_log_print(ANDROID_LOG_ERROR, "ncnn", "Failed to open annotation file for writing: %s", annotationFilename.c_str());
+                } else {
+                    for (size_t i = 0; i < filteredObjects.size(); i++)
+                    {
+                        const Object& obj = filteredObjects[i];
+                        float centerX = (obj.rect.x + obj.rect.width / 2.0f) / imgWidth;
+                        float centerY = (obj.rect.y + obj.rect.height / 2.0f) / imgHeight;
+                        float normWidth = obj.rect.width / imgWidth;
+                        float normHeight = obj.rect.height / imgHeight;
+                        fprintf(f, "%d %.8f %.8f %.8f %.8f\n", obj.label, centerX, centerY, normWidth, normHeight);
+                    }
+                    fclose(f);
+                    __android_log_print(ANDROID_LOG_DEBUG, "ncnn", "Saved annotation file: %s", annotationFilename.c_str());
+                }
             }
         }
+
     }
 
 
@@ -441,6 +473,10 @@ void MyNdkCamera::on_image_render(cv::Mat& rgb) const
 static MyNdkCamera* g_camera = 0;
 
 extern "C" {
+JNIEXPORT void JNICALL Java_com_hzcu_potholeDetection_Yolov11Ncnn_setVehicleSpeed(JNIEnv* env, jobject thiz, jdouble speed)
+{
+    g_currentSpeed = speed;
+}
 JNIEXPORT void JNICALL Java_com_hzcu_potholeDetection_Yolov11Ncnn_setCollectionState(JNIEnv* env, jobject thiz, jboolean state)
 {
     g_isCollectingImages = (state == JNI_TRUE);

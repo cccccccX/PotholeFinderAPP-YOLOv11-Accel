@@ -448,7 +448,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
             mp.start();
             potholeDetected = true;
-            time = System.currentTimeMillis() + 2000; // 超时2秒
+//            time = System.currentTimeMillis() + 2000; // 超时2秒
             count++;
             if (sdz > 4.8) {
                 effectOfRiding = "High";

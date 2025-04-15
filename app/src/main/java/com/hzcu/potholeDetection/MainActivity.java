@@ -99,7 +99,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         // 基于目标检测界面（假设使用 activity_main2.xml）
-        setContentView(R.layout.activity_main2);
+        setContentView(R.layout.activity_main);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // 先设置路径，再打开相机和加载模型
@@ -275,10 +275,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private void toggleCollection() {
         isCollecting = !isCollecting;
         if (isCollecting) {
-            buttonToggleCollection.setText("Stop Collection");
+            buttonToggleCollection.setText("停止采集");
             yolov11ncnn.setCollectionState(true);
         } else {
-            buttonToggleCollection.setText("Start Collection");
+            buttonToggleCollection.setText("开始采集");
             yolov11ncnn.setCollectionState(false);
         }
     }

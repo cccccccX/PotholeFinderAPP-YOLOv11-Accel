@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- res/layout/activity_main.xml -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="vertical"
-    android:layout_width="fill_parent"
-    android:layout_height="fill_parent">
-
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="fill_parent"
@@ -38,9 +38,86 @@
 
     </LinearLayout>
 
+
+    <!-- SurfaceView 撑满中间位置 -->
     <SurfaceView
         android:id="@+id/cameraview"
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent" />
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 
+    <!--    -->
+<!--    <androidx.camera.view.PreviewView-->
+<!--        android:id="@+id/preview_view"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="0dp"-->
+<!--        android:layout_weight="1"/>-->
+    <!-- 下方的 TextView 和 Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:id="@+id/textView_acceleration"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="加速度数据："
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/textView_gyroscope"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="角速度数据："
+                android:textSize="18sp" />
+        </LinearLayout>
+
+
+        <TextView
+            android:id="@+id/textView_location"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="正在获取地理位置..."
+            android:textSize="18sp"
+            android:layout_marginTop="8dp" />
+        <TextView
+            android:id="@+id/textView_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="当前时间："
+            android:textSize="18sp"
+            android:layout_marginTop="8dp" />
+        <TextView
+            android:id="@+id/tvDetected"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="加速度检测：0"
+            android:textSize="18sp"
+            android:layout_marginTop="8dp" />
+        <Button
+            android:id="@+id/button_toggle_collection"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="开始采集"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="16dp" />
+        <!-- 新增：大按钮用于记录时间戳 -->
+        <Button
+            android:id="@+id/button_mark_timestamp"
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:text="标记坑洼时间戳"
+            android:textSize="24sp"
+            android:layout_marginTop="16dp" />
+    </LinearLayout>
 </LinearLayout>

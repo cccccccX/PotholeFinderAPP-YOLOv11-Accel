@@ -94,12 +94,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private MediaPlayer mp;
 
     private SVMPredictor svmPredictor = new SVMPredictor();
+    // 在类成员变量部分添加：
+    private Button buttonMarkTimestamp;
+    private PrintWriter timestampWriter;
+    private File timestampFile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         // 基于目标检测界面（假设使用 activity_main2.xml）
-        setContentView(R.layout.activity_main2);
+        setContentView(R.layout.activity_main);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // 先设置路径，再打开相机和加载模型
@@ -130,6 +134,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // 初始化加速度检测功能：文件记录、窗口起始时间
         initFiles();
+        initTimestampFile();  // 新增：初始化记录时间戳的文件
         windowStartTime = System.currentTimeMillis();
 
         // 检查位置权限并初始化定位
@@ -150,7 +155,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         // 加速度采集开关（如需结合目标检测数据采集，可在点击按钮时调用）
         buttonToggleCollection.setOnClickListener(v -> toggleCollection());
     }
-
+    // 新增：初始化记录时间戳文件的方法
+    private void initTimestampFile() {
+        try {
+            File dir = getExternalFilesDir(null);
+            timestampFile = new File(dir, "timestamp_marks.csv");
+            timestampWriter = new PrintWriter(new FileOutputStream(timestampFile, true));
+            if (timestampFile.length() == 0) {
+                timestampWriter.println("timestamp");
+                timestampWriter.flush();
+                Log.d("FileInit", "Timestamp header written.");
+            }
+        } catch (Exception e) {
+            Log.e("FileInit", "Error initializing timestamp file: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
     /**
      * 初始化界面控件
      */
@@ -206,6 +226,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         buttonToggleCollection = findViewById(R.id.button_toggle_collection);
         // 如果布局中存在用于显示检测计数的控件，则获取
         tvCount = findViewById(R.id.tvDetected);
+        // 新增：绑定记录时间戳按钮
+        buttonMarkTimestamp = findViewById(R.id.button_mark_timestamp);
+        buttonMarkTimestamp.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                long ts = System.currentTimeMillis();
+                if (timestampWriter != null) {
+                    timestampWriter.println(ts);
+                    timestampWriter.flush();
+                }
+                Toast.makeText(MainActivity.this, "已记录时间戳: " + ts, Toast.LENGTH_SHORT).show();
+                Log.d("Timestamp", "Manual timestamp recorded: " + ts);
+            }
+        });
     }
 
 
@@ -275,10 +309,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private void toggleCollection() {
         isCollecting = !isCollecting;
         if (isCollecting) {
-            buttonToggleCollection.setText("Stop Collection");
-            yolov11ncnn.setCollectionState(true);
+            buttonToggleCollection.setText("结束采集");
+//            yolov11ncnn.setCollectionState(true);
         } else {
-            buttonToggleCollection.setText("Start Collection");
+            buttonToggleCollection.setText("开始采集");
             yolov11ncnn.setCollectionState(false);
         }
     }
@@ -382,6 +416,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         // -----【构造特征向量并调用 SVM 预测】-----
         double[] arr = {meanx, meany, meanz, sdx, sdy, sdz, meanxg, meanyg, meanzg, sdxg, sdyg, sdzg};
         prediction = svmPredictor.doubleFromJNI(arr);
+//        prediction = 1;
 
 
         // -----【将特征数据写入文件（记录窗口起始与结束时间及特征值和预测结果）】-----
@@ -464,7 +499,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         sensorManager.registerListener(this, mAccelsensor, SensorManager.SENSOR_DELAY_GAME);
         sensorManager.registerListener(this, mGyrosensor, SensorManager.SENSOR_DELAY_GAME);
         if (isCollecting) {
-            yolov11ncnn.setCollectionState(true);
+//            yolov11ncnn.setCollectionState(true);
         }
     }
 
@@ -485,6 +520,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (featureDataWriter != null) {
             featureDataWriter.close();
             Log.d("FileWrite", "FeatureDataWriter closed.");
+        }
+        if (timestampWriter != null) {
+            timestampWriter.close();
+            Log.d("FileWrite", "TimestampWriter closed.");
         }
     }
 

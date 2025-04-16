@@ -227,19 +227,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         // 如果布局中存在用于显示检测计数的控件，则获取
         tvCount = findViewById(R.id.tvDetected);
         // 新增：绑定记录时间戳按钮
-        buttonMarkTimestamp = findViewById(R.id.button_mark_timestamp);
-        buttonMarkTimestamp.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                long ts = System.currentTimeMillis();
-                if (timestampWriter != null) {
-                    timestampWriter.println(ts);
-                    timestampWriter.flush();
-                }
-                Toast.makeText(MainActivity.this, "已记录时间戳: " + ts, Toast.LENGTH_SHORT).show();
-                Log.d("Timestamp", "Manual timestamp recorded: " + ts);
-            }
-        });
+//        buttonMarkTimestamp = findViewById(R.id.button_mark_timestamp);
+//        buttonMarkTimestamp.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                long ts = System.currentTimeMillis();
+//                if (timestampWriter != null) {
+//                    timestampWriter.println(ts);
+//                    timestampWriter.flush();
+//                }
+//                Toast.makeText(MainActivity.this, "已记录时间戳: " + ts, Toast.LENGTH_SHORT).show();
+//                Log.d("Timestamp", "Manual timestamp recorded: " + ts);
+//            }
+//        });
     }
 
 
@@ -415,8 +415,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // -----【构造特征向量并调用 SVM 预测】-----
         double[] arr = {meanx, meany, meanz, sdx, sdy, sdz, meanxg, meanyg, meanzg, sdxg, sdyg, sdzg};
-        prediction = svmPredictor.doubleFromJNI(arr);
-//        prediction = 1;
+//        prediction = svmPredictor.doubleFromJNI(arr);
+        prediction = 1;
 
 
         // -----【将特征数据写入文件（记录窗口起始与结束时间及特征值和预测结果）】-----

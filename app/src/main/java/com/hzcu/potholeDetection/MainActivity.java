@@ -94,6 +94,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private MediaPlayer mp;
 
     private SVMPredictor svmPredictor = new SVMPredictor();
+    private Button buttonMarkTimestamp;
+    private PrintWriter timestampWriter;
+    private File timestampFile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -130,6 +133,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // 初始化加速度检测功能：文件记录、窗口起始时间
         initFiles();
+        initTimestampFile();
         windowStartTime = System.currentTimeMillis();
 
         // 检查位置权限并初始化定位
@@ -206,7 +210,39 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         buttonToggleCollection = findViewById(R.id.button_toggle_collection);
         // 如果布局中存在用于显示检测计数的控件，则获取
         tvCount = findViewById(R.id.tvDetected);
+
+        // 新增：绑定记录时间戳按钮
+        buttonMarkTimestamp = findViewById(R.id.button_mark_timestamp);
+        buttonMarkTimestamp.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                long ts = System.currentTimeMillis();
+                if (timestampWriter != null) {
+                    timestampWriter.println(ts);
+                    timestampWriter.flush();
+                }
+                Toast.makeText(MainActivity.this, "已记录时间戳: " + ts, Toast.LENGTH_SHORT).show();
+                Log.d("Timestamp", "Manual timestamp recorded: " + ts);
+            }
+        });
     }
+    // 新增：初始化记录时间戳文件的方法
+    private void initTimestampFile() {
+        try {
+            File dir = getExternalFilesDir(null);
+            timestampFile = new File(dir, "timestamp_marks.csv");
+            timestampWriter = new PrintWriter(new FileOutputStream(timestampFile, true));
+            if (timestampFile.length() == 0) {
+                timestampWriter.println("timestamp");
+                timestampWriter.flush();
+                Log.d("FileInit", "Timestamp header written.");
+            }
+        } catch (Exception e) {
+            Log.e("FileInit", "Error initializing timestamp file: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
 
 
     /**

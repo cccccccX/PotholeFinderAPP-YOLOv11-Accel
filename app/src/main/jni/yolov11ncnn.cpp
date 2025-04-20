@@ -57,7 +57,7 @@ static long long g_lastSavedTime = 0;
 
 // 定义存储间隔参数（可根据实际情况调整）
 const double T_MIN = 60.0f;    // 高速时最小存储间隔（50毫秒）
-const double T_MAX = 2000.0f;  // 低速（或静止）时的最大存储间隔（2000毫秒）
+const double T_MAX = 500.0f;  // 低速（或静止）时的最大存储间隔（2000毫秒）
 const double V_MIN = 0.5f;     // 低速阈值（低于此值认为车辆处于停滞状态）
 const double V_MAX = 8.0f;    // 高速阈值（高于此值认为车辆行驶速度足够快）
 
@@ -275,7 +275,7 @@ void MyNdkCamera::on_image_render(cv::Mat& rgb) const
     // 过滤只保留类别 0 (Crack)、2 (Net) 和 3 (Pothole)
     std::vector<Object> filteredObjects;
     for (auto& obj : objects) {
-        if (obj.label == 0 || obj.label == 2 || obj.label == 3) {
+        if (obj.label == 0 || obj.label == 1 || obj.label == 2 || obj.label == 3) {
             filteredObjects.push_back(obj);
         }
     }

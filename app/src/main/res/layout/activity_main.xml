@@ -4,6 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical">
+
+    <!-- 第一行：切换摄像头按钮 -->
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="fill_parent"
@@ -14,9 +16,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="切换摄像头" />
-
     </LinearLayout>
 
+    <!-- 第二行：模型与 CPU/GPU 选择 -->
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="fill_parent"
@@ -35,30 +37,23 @@
             android:layout_height="wrap_content"
             android:drawSelectorOnTop="true"
             android:entries="@array/cpugpu_array" />
-
     </LinearLayout>
 
-
-    <!-- SurfaceView 撑满中间位置 -->
+    <!-- 中间部分：SurfaceView 撑满中间 -->
     <SurfaceView
         android:id="@+id/cameraview"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!--    -->
-<!--    <androidx.camera.view.PreviewView-->
-<!--        android:id="@+id/preview_view"-->
-<!--        android:layout_width="match_parent"-->
-<!--        android:layout_height="0dp"-->
-<!--        android:layout_weight="1"/>-->
-    <!-- 下方的 TextView 和 Button -->
+    <!-- 下方部分：文本显示区域及按钮 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="8dp">
 
+        <!-- 两个 TextView：加速度和角速度 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -82,7 +77,7 @@
                 android:textSize="18sp" />
         </LinearLayout>
 
-
+        <!-- 地理位置和当前时间 -->
         <TextView
             android:id="@+id/textView_location"
             android:layout_width="wrap_content"
@@ -90,6 +85,7 @@
             android:text="正在获取地理位置..."
             android:textSize="18sp"
             android:layout_marginTop="8dp" />
+
         <TextView
             android:id="@+id/textView_time"
             android:layout_width="wrap_content"
@@ -97,6 +93,8 @@
             android:text="当前时间："
             android:textSize="18sp"
             android:layout_marginTop="8dp" />
+
+        <!-- 加速度检测计数 -->
         <TextView
             android:id="@+id/tvDetected"
             android:layout_width="wrap_content"
@@ -104,12 +102,27 @@
             android:text="加速度检测：0"
             android:textSize="18sp"
             android:layout_marginTop="8dp" />
-        <Button
-            android:id="@+id/button_toggle_collection"
-            android:layout_width="wrap_content"
+
+        <!-- 将“开始采集”按钮与“标记坑洼时间戳”按钮放入同一行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="开始采集"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginTop="16dp" />
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp"
+            android:gravity="center_horizontal">
+
+            <Button
+                android:id="@+id/button_toggle_collection"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="开始采集" />
+
+            <Button
+                android:id="@+id/button_mark_timestamp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="标记坑洼时间戳"
+                android:layout_marginLeft="16dp" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
